@@ -1,0 +1,84 @@
+# PDK library name.
+tech_lib: 'stacy_fakename'
+# layout unit, in meters.
+layout_unit: 1.0e-6
+# layout resolution, in layout units.
+resolution: 0.001
+# True if BAG needs to handle coloring metals.
+use_track_coloring: False
+# default purpose name
+default_purpose: drawing
+# pin purpose name
+pin_purpose: pin
+# label purpose name
+label_purpose: drawing
+# True to create pin objects
+make_pin_obj: True
+
+well_layers: {}
+
+thres_layers: {}
+
+imp_layers: {}
+
+# mapping from metal layer ID to layer/purpose pair that defines
+# a metal resistor.
+res_metal_layer_table: {}
+
+# mapping from metal layer ID to layer/purpose pair that
+# defines metal exclusion region.
+metal_exclude_table: {}
+
+# mapping from metal layer ID to metal layer name.  Assume purpose is 'drawing'.
+lay_purp_list: &lp_list {}
+
+dum_lay_purp_list: *lp_list
+
+width_intervals: {}
+
+# mapping from tuple of via layers to via ID.
+via_id: {}
+
+# table of electromigration temperature scale factor
+idc_em_scale: {}
+
+# via enclosure/spacing rules
+via_symmetry_list: []
+via_square_list: []
+
+# Via catalog
+via: {}
+
+# minimum wire spacing rule.  Space is measured orthogonal to wire direction.
+sp_min: {}
+
+# minimum line-end spacing rule.  Space is measured parallel to wire direction.
+sp_le_min:
+
+# minimum length/minimum area rules.
+len_min: {}
+
+margins: {}
+
+# transistor drawing layers
+mos_lay_table: {}
+
+# transistor DRC rules.
+mos: {}
+
+# resistor DRC rules
+res: {}
+
+# fill  DRC rules
+fill: {}
+
+# layer map
+layer: {}
+
+# purpose map
+purpose:
+  drawing: 1
+  pin: 2
+
+# Via layers
+via_layers: {}

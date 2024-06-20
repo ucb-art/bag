@@ -30,10 +30,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      # - name: Setup Python
-      #   uses: actions/setup-python@v4
-      #   with:
-      #     python-version: ${{ matrix.python-version }}
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
       # - name: Load Cached Poetry Install
       #   id: cached-poetry
       #   uses: actions/cache@v3
@@ -62,6 +62,10 @@ jobs:
       #   id: unit-tests
       #   run: |
       #     poetry run pytest tests/ -v
+      - name: Run unit tests
+        id: unit-tests
+        run: |
+          pytest tests/ -v
       # - name: Type checking
       #   id: type-checks
       #   run: |

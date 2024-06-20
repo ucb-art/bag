@@ -1,0 +1,20 @@
+# TODO: in pytest 7, this can be moved to pytest.ini
+import sys  
+sys.path.append('src')
+sys.path.append('pybag/_build/lib')
+sys.path.append('tests')
+
+# TODO: I could use a fixture to add these
+import os
+cwd = os.getcwd()
+os.environ['BAG_TECH_CONFIG_DIR'] = f'{cwd}/tests/util/'
+os.environ['BAG_CONFIG_PATH'] = f'{cwd}/tests/util/bag_config.yaml'
+
+from bag.core import BagProject
+from bag.util.misc import register_pdb_hook
+
+register_pdb_hook()
+
+def test_startup() -> bool:
+    prj = BagProject()
+    return 1

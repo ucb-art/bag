@@ -1,0 +1,59 @@
+# BAG socket configuration
+socket:
+  # the host running the database.  localhost if on the same machine.
+  host: "localhost"
+  # file containing BAG server port number
+  port_file: "BAG_server_port.txt"
+  # the log file for socket communication debugging
+  log_file: "BAG_socket.log"
+  # number of messages allowed in a pipeline
+  pipeline: 100
+
+# CAD database configuration
+database:
+  lib_def_path: "tests/util/cds.lib"
+  # the python class that handles database interaction.
+  class: "bag.interface.oa.OAInterface"
+  # default directory to create generated libraries in.
+  default_lib_path: "${BAG_WORK_DIR}/gen_libs"
+  # If true, then everytime we generate schematic/layout from BAG, all opened cellviews are closed
+  close_all_cellviews: False
+
+  # configurations for schematic import and generation
+  schematic:
+    # technology library to configure new libraries with
+    tech_lib: "fake_tech"
+    # libraries to exclude for schematic import
+    exclude_libraries: ["analogLib", "basic", "veriloga_lib", "ahdlLib"]
+    # libraries to exclude for modeling purposes
+    model_exclude_libraries: []
+    # cells to exclude for modeling purposes
+    model_exclude_cells:
+      basic: ['noConn']
+  # configurations used to create a Checker object to run LVS/RCX
+  # checker:
+  #   # the Checker class.
+  #   checker_cls: "bag.verification.calibre.Calibre"
+
+# Simulation configurations
+simulation:
+  # python class that talks with the simulator
+  class: "bag.simulation.spectre.SpectreInterface"
+  # corner configuration file
+  env_file: "${BAG_TECH_CONFIG_DIR}/corners_setup.yaml"
+  # True if using pysrr for SRR to HDF5 conversion. False to use executable
+  # Executable runs faster for smaller simulation data, pysrr runs faster for highly parameterized simulation data
+  use_pysrr: False
+  compress: True
+  rtol: 1.0e-8
+  atol: 1.0e-22
+
+# technology specific configuration are stored in a separate file.
+# this field tells BAG where to look for it.
+tech_config_path: "${BAG_TECH_CONFIG_DIR}/tech_config.yaml"
+
+# BAG design libraries definition file.
+lib_defs: "${BAG_TECH_CONFIG_DIR}/bag_libs.def"
+
+# place to put new design libraries
+new_lib_path: "BagModules"

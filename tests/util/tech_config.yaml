@@ -1,0 +1,31 @@
+# the Technology class.
+class: 'util.templates_mock.tech.TechInfoMock'
+
+# transistor technology parameters
+mos:
+  # the transistor width minimum resolution.
+  width_resolution: 1
+  # the transistor length minimum resolution.
+  length_resolution: 1.0e-9
+
+# routing grid parameters
+routing_grid:
+  1: [y, 100, 100]
+  2: [x, 100, 100]
+  3: [y, 100, 100]
+  4: [x, 100, 100]
+  5: [y, 100, 100]
+  6: [x, 100, 100]
+  7: [y, 400, 400]
+  8: [x, 400, 400]
+
+# MOM cap parameters
+mom_cap:
+  standard:
+    bot_dir: y
+    info:
+      # w, sp, margin, num_ports, port_tr_w
+      1: !!python/tuple [100, 100, 200, 2, 2]
+      2: !!python/tuple [100, 100, 200, 2, 2]
+      3: !!python/tuple [100, 100, 200, 2, 2]
+      4: !!python/tuple [100, 100, 200, 1, 3]
