@@ -175,6 +175,10 @@ jobs:
       #     echo "PYTHONPATH=src" >> "$GITHUB_ENV"
       #     echo "PYTHONPATH=${PYTHONPATH}:pybag/_build/lib" >> "$GITHUB_ENV"
       #     echo "PYTHONPATH=${PYTHONPATH}:tests" >> "$GITHUB_ENV"
+      - name: Run simple test
+        id: simple-test
+        run: |
+          python tests/run_core.py
       - name: Run unit tests
         id: unit-tests
         run: |
