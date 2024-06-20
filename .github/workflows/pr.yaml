@@ -6,7 +6,107 @@ env:
   POETRY_VERSION: "1.2.0"
 
 jobs:
+  build_pybag:
+    build:
+    runs-on: ubuntu-20.04
+    defaults:
+      run:
+        shell: bash -el {0}
+    continue-on-error: true
+    outputs:
+      pytestOutput: ${{ steps.unit-tests.outputs.test }}
+      mypyOutput: ${{ steps.type-checks.outputs.test }}
+    strategy:
+      matrix:
+        python-version: ["3.7"]
+    steps:
+      - name: Checkout submodule
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      - name: Enter pybag
+        run: cd pybag
+      - name: Get pybag commit string
+        run: |
+          git rev-parse HEAD >> $PYBAG_COMMIT
+          echo $PYBAG_COMMIT
+      - name: Cache pybag
+        id: cache-pybag
+        uses: actions/cache@v3
+        with:
+          path: _build
+          key:
+            pybag-${{ runner.os }}--${{ runner.arch }}--${{
+            hashFiles('environment.yml') }}-${{
+            env.PYBAG_COMMIT }
+          env:
+            # Increase this value to reset cache if etc/example-environment.yml has not changed
+            CACHE_NUMBER: 0
+      - name: Install packages
+        if: steps.cache-pybag.outputs.cache-hit != 'true'
+        run: |
+          sudo apt update
+          sudo apt -y install \
+            autoconf \
+            curl \
+            gcc-8 \
+            g++-8 \
+            git \
+            libtool \
+            libltdl-dev \
+            pkg-config \
+            make \
+      - name: Setup conda
+        if: steps.cache-pybag.outputs.cache-hit != 'true'
+        uses: conda-incubator/setup-miniconda@v3.0.4
+        with:
+          activate-environment: bag_py3d7_c
+          python-version: ${{ matrix.python-version }}
+          environment-file: environment.yml
+          auto-activate-base: false
+      - name: Cache Conda env
+        if: steps.cache-pybag.outputs.cache-hit != 'true'
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CONDA }}/envs
+          key:
+            conda-${{ runner.os }}--${{ runner.arch }}--${{
+            steps.get-date.outputs.today }}-${{
+            hashFiles('environment.yml') }}-${{
+            env.CACHE_NUMBER }}
+        env:
+          # Increase this value to reset cache if etc/example-environment.yml has not changed
+          CACHE_NUMBER: 0
+        id: cache
+      - name: Update environment
+        if: steps.cache-pybag.outputs.cache-hit != 'true'
+        run: |
+          echo "env.conda=${{ env.CONDA }}"
+          conda env update -n bag_py3d7_c -f environment.yml
+      - name: Install additional dependencies
+        if: steps.cache-pybag.outputs.cache-hit != 'true'
+        run: |
+          cd setup
+          mkdir install
+          cp setup_script.sh install/
+          cp render_template.py install/
+          cp project-config.template install/
+          cd install
+          ./setup_script.sh
+          cd ../../
+      - name: Update environment variables
+        if: steps.cache-pybag.outputs.cache-hit != 'true'
+        run: |
+          export PYBAG_PYTHON=python
+          which $PYBAG_PYTHON
+      - name: Build pybag
+        if: steps.cache-pybag.outputs.cache-hit != 'true'
+        id: cpp-build
+        run: |
+          which python
+          python setup.py build
   tests:
+    needs: build_pybag
     defaults:
       run:
         shell: bash -el {0}
@@ -21,9 +121,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      # - name: Setup Python
-      #   uses: actions/setup-python@v4
-      #   with:
       - name: Setup conda
         uses: conda-incubator/setup-miniconda@v3.0.4
         with:
@@ -53,41 +150,25 @@ jobs:
         run: |
           conda init
           conda activate bag_py3d7_c 
-      # - name: Load Cached Poetry Install
-      #   id: cached-poetry
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: ~/.local
-      #     key: poetry-${{ runner.os }}-${{ matrix.python-version }}-${{ env.POETRY_VERSION }}
-      # - name: Install Poetry
-      #   uses: snok/install-poetry@v1
-      #   if: steps.cached-poetry.outputs.cache-hit != 'true'
-      #   with:
-      #     virtualenvs-create: true
-      #     virtualenvs-in-project: true
-      #     version: ${{ env.POETRY_VERSION }}
-      # - name: Load Cached Poetry virtualenv
-      #   id: cached-venv
-      #   uses: actions/cache@v3
-      #   with:
-      #     path: .venv
-      #     key: venv-${{ runner.os }}-${{ matrix.python-version }}-${{ hashFiles('**/poetry.lock') }}
-      # - name: Create Poetry env
-      #   if: steps.cached-venv.outputs.cache-hit != 'true'
-      #   run: |
-      #     poetry config virtualenvs.in-project true
-      #     poetry install --no-ansi
-      # - name: Run unit tests
-      #   id: unit-tests
-      #   run: |
-      #     poetry run pytest tests/ -v
+      - name: Get pybag commit string
+        run: |
+          cd pybag
+          git rev-parse HEAD >> $PYBAG_COMMIT
+          echo $PYBAG_COMMIT
+          cd ../
+      - name: Cache pybag
+        id: cache-pybag
+        uses: actions/cache@v3
+        with:
+          path: pybag/_build
+          key:
+            pybag-${{ runner.os }}--${{ runner.arch }}--${{
+            hashFiles('environment.yml') }}-${{
+            env.PYBAG_COMMIT }
+          env:
+            # Increase this value to reset cache if etc/example-environment.yml has not changed
+            CACHE_NUMBER: 0
       - name: Run unit tests
         id: unit-tests
         run: |
           pytest tests/ -v
-      # - name: Type checking
-      #   id: type-checks
-      #   run: |
-      #     touch .venv/lib/python${{ matrix.python-version }}/site-packages/ruamel/py.typed
-      #     touch .venv/lib/python${{ matrix.python-version }}/site-packages/networkx/py.typed
-      #     poetry run pyright
