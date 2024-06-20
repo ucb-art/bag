@@ -23,12 +23,12 @@ jobs:
         uses: actions/checkout@v3
         with:
           submodules: recursive
-      - name: Enter pybag
-        run: cd pybag
       - name: Get pybag commit string
         run: |
+          cd pybag
           export PYBAG_COMMIT="$(git rev-parse HEAD)"
           echo $PYBAG_COMMIT
+          echo "PYBAG_COMMIT=$PYBAG_COMMIT" >> "$GITHUB_ENV"
       - name: Cache pybag
         id: cache-pybag
         uses: actions/cache@v3
@@ -85,24 +85,26 @@ jobs:
       - name: Install additional dependencies
         if: steps.cache-pybag.outputs.cache-hit != 'true'
         run: |
-          cd setup
+          cd pybag/setup
           mkdir install
           cp setup_script.sh install/
           cp render_template.py install/
           cp project-config.template install/
           cd install
           ./setup_script.sh
-          cd ../../
       - name: Update environment variables
         if: steps.cache-pybag.outputs.cache-hit != 'true'
         run: |
           export PYBAG_PYTHON=python
           which $PYBAG_PYTHON
+          echo "PYBAG_PYTHON=$PYBAG_PYTHON" >> "$GITHUB_ENV"
       - name: Build pybag
         if: steps.cache-pybag.outputs.cache-hit != 'true'
         id: cpp-build
         run: |
           which python
+          echo $PYBAG_PYTHON
+          cd pybag
           python setup.py build
   tests:
     needs: build_pybag
@@ -154,7 +156,7 @@ jobs:
           cd pybag
           export PYBAG_COMMIT="$(git rev-parse HEAD)"
           echo $PYBAG_COMMIT
-          cd ../
+          echo "PYBAG_COMMIT=$PYBAG_COMMIT" >> "$GITHUB_ENV"
       - name: Cache pybag
         id: cache-pybag
         uses: actions/cache@v3
