@@ -27,7 +27,7 @@ jobs:
         run: cd pybag
       - name: Get pybag commit string
         run: |
-          git rev-parse HEAD >> $PYBAG_COMMIT
+          export PYBAG_COMMIT="$(git rev-parse HEAD)"
           echo $PYBAG_COMMIT
       - name: Cache pybag
         id: cache-pybag
@@ -152,7 +152,7 @@ jobs:
       - name: Get pybag commit string
         run: |
           cd pybag
-          git rev-parse HEAD >> $PYBAG_COMMIT
+          export PYBAG_COMMIT="$(git rev-parse HEAD)"
           echo $PYBAG_COMMIT
           cd ../
       - name: Cache pybag
