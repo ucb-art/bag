@@ -168,6 +168,11 @@ jobs:
         env:
             # Increase this value to reset cache if etc/example-environment.yml has not changed
             CACHE_NUMBER: 0
+      - name: Setup env vars
+        run: | 
+          echo "PYTHONPATH=src" >> "$GITHUB_ENV"
+          echo "PYTHONPATH=${PYTHONPATH}:pybag/_build/lib" >> "$GITHUB_ENV"
+          echo "PYTHONPATH=${PYTHONPATH}:tests" >> "$GITHUB_ENV"
       - name: Run unit tests
         id: unit-tests
         run: |
