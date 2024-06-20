@@ -24,11 +24,6 @@ sphinx-rtd-theme = "^1.0.0"
 sphinx-jsonschema = "^1.19.1"
 sphinx_rtd_size = "^0.2.0"
 
-[[tool.poetry.source]]
-name = "testpypi"
-url = "https://test.pypi.org/legacy/"
-priority = "explicit"
-
 [build-system]
 requires = ["poetry-core>=1.0.8", "setuptools>=65.3"]
 build-backend = "poetry.core.masonry.api"
