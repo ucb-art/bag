@@ -37,7 +37,7 @@ jobs:
           key:
             pybag-${{ runner.os }}--${{ runner.arch }}--${{
             hashFiles('environment.yml') }}-${{
-            env.PYBAG_COMMIT }
+            env.PYBAG_COMMIT }}
           env:
             # Increase this value to reset cache if etc/example-environment.yml has not changed
             CACHE_NUMBER: 0
@@ -163,7 +163,7 @@ jobs:
           key:
             pybag-${{ runner.os }}--${{ runner.arch }}--${{
             hashFiles('environment.yml') }}-${{
-            env.PYBAG_COMMIT }
+            env.PYBAG_COMMIT }}
           env:
             # Increase this value to reset cache if etc/example-environment.yml has not changed
             CACHE_NUMBER: 0
