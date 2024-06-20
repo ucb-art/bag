@@ -32,9 +32,3 @@ priority = "explicit"
 [build-system]
 requires = ["poetry-core>=1.0.8", "setuptools>=65.3"]
 build-backend = "poetry.core.masonry.api"
-
-[testenv]
-deps = pytest
-commands =
-  pytest tests/ {posargs}
-"""
