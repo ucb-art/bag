@@ -41,12 +41,14 @@ jobs:
           # Increase this value to reset cache if etc/example-environment.yml has not changed
           CACHE_NUMBER: 0
         id: cache
-
       - name: Update environment
         run:
           conda env update -n bag_py3d7_c -f
           environment.yml
         if: steps.cache.outputs.cache-hit != 'true'
+      - name: Activate environment
+        run:
+          conda activate bag_py3d7_c 
       # - name: Load Cached Poetry Install
       #   id: cached-poetry
       #   uses: actions/cache@v3
