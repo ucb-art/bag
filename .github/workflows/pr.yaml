@@ -7,6 +7,9 @@ env:
 
 jobs:
   tests:
+    defaults:
+      run:
+        shell: bash -el {0}
     runs-on: ubuntu-latest
     continue-on-error: true
     outputs:
