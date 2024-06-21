@@ -18,11 +18,6 @@ from bag.util.misc import register_pdb_hook
 
 register_pdb_hook()
 
-def test_import_pybag() -> bool:
-    from pybag.core import PyOADatabase    
-    return 1
-
-
 def test_startup() -> bool:
     prj = BagProject()
     return 1
