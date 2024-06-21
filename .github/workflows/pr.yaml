@@ -1,6 +1,9 @@
 name: bag-pr-ci
 
-on: [push]
+on:
+  push:
+  schedule:
+    - cron: '0 9 * * *'  # 9AM UTC = 2AM PST
 
 env:
   CONDA_ENV_NAME: bag_py3d7_c
@@ -94,7 +97,7 @@ jobs:
             # Increase this value to reset cache if etc/example-environment.yml has not changed
             CACHE_NUMBER: 0
       - name: Build pybag
-        if: steps.cache-pybag.outputs.cache-hit != 'true'
+        if: (steps.cache-pybag.outputs.cache-hit != 'true') || (steps.cache-conda.outputs.cache-hit != 'true')
         id: cpp-build
         run: |
           cd pybag
