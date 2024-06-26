@@ -19,5 +19,7 @@ from bag.util.misc import register_pdb_hook
 register_pdb_hook()
 
 def test_startup() -> bool:
+    # Test if we can successfully start a BagProject, the main entry point into BAG
+    # This includes loading pybag and setting up the mock tech librayr.
     prj = BagProject()
     return 1

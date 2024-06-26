@@ -22,7 +22,7 @@ database:
   # configurations for schematic import and generation
   schematic:
     # technology library to configure new libraries with
-    tech_lib: "fake_tech"
+    tech_lib: "mock_tech"
     # libraries to exclude for schematic import
     exclude_libraries: ["analogLib", "basic", "veriloga_lib", "ahdlLib"]
     # libraries to exclude for modeling purposes

@@ -1,11 +1,10 @@
-# TODO: in pytest 7, this can be moved to pytest.ini
+# Manual run script to sanity check test_start_bag.py
+
 import sys  
 sys.path.append('src')
 sys.path.append('pybag/_build/lib')
 sys.path.append('tests')
 
-# These are all necessary for BagProject initialization
-# TODO: I could use a fixture to add these
 import os
 cwd = os.getcwd()
 os.environ['BAG_TECH_CONFIG_DIR'] = f'{cwd}/tests/util/'

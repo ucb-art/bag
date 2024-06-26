@@ -1,5 +1,5 @@
 # PDK library name.
-tech_lib: 'stacy_fakename'
+tech_lib: 'mock_tech'
 # layout unit, in meters.
 layout_unit: 1.0e-6
 # layout resolution, in layout units.
