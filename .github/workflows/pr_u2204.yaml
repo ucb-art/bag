@@ -1,0 +1,190 @@
+# CI flow for Ubuntu 22.04
+name: bag-pr-ci_u2204
+
+on:
+  push:
+  schedule:
+    - cron: '0 9 * * *'  # 9AM UTC = 2AM PST
+
+env:
+  CONDA_ENV_NAME: bag_py3d8
+
+jobs:
+  build_pybag:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash -el {0}
+    continue-on-error: true
+    strategy:
+      matrix:
+        python-version: ["3.8"]
+    steps:
+      - name: Get current date
+        id: get-date
+        run: echo "::set-output name=today::$(date +'%Y-%m-%d')"
+      - name: Checkout submodule
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      # Phase 1: Conda setup
+      - name: Setup conda
+        uses: conda-incubator/setup-miniconda@v3.0.4
+        with:
+          activate-environment: ${{ env.CONDA_ENV_NAME }}
+          python-version: ${{ matrix.python-version }}
+          auto-activate-base: false
+      - name: Save Conda Env
+        # Workaround, this isn't working otherwise.
+        run: |
+          echo "CONDA=$CONDA"
+          echo "CONDA=$CONDA" >> "$GITHUB_ENV"
+      - name: Cache Conda env
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CONDA }}/envs/${{ env.CONDA_ENV_NAME }}
+          key:
+            conda-${{ runner.os }}-2204--${{ runner.arch }}--${{
+            steps.get-date.outputs.today }}-${{
+            hashFiles('env_3p8.yml') }}-${{
+            env.CACHE_NUMBER }}
+        env:
+          # Increase this value to reset cache if etc/example-environment.yml has not changed
+          CACHE_NUMBER: 0
+        id: cache-conda
+      - name: Install packages
+        if: steps.cache-conda.outputs.cache-hit != 'true'
+        run: |
+          sudo apt update
+          sudo apt -y install \
+            autoconf \
+            curl \
+            gcc \
+            g++ \
+            git \
+            libtool \
+            libltdl-dev \
+            pkg-config \
+            make \
+            libgl1-mesa-dev \
+      - name: Update conda environment
+        if: steps.cache-conda.outputs.cache-hit != 'true'
+        run: |
+          echo "env.conda=${{ env.CONDA }}"
+          conda env update -n ${{ env.CONDA_ENV_NAME }} -f env_3p8.yml
+      - name: Install additional dependencies
+        if: steps.cache-conda.outputs.cache-hit != 'true'
+        run: |
+          cd pybag/setup
+          mkdir install
+          cp setup_script-2204.sh install/
+          cp render_template-2204.py install/
+          cp project-config-2204.template install/
+          cd install
+          ./setup_script-2204.sh
+      # Phase 2: Build pybag
+      - name: Get pybag commit string
+        run: |
+          cd pybag
+          export PYBAG_COMMIT="$(git rev-parse HEAD)"
+          echo $PYBAG_COMMIT
+          echo "PYBAG_COMMIT=$PYBAG_COMMIT" >> "$GITHUB_ENV"
+      - name: Cache pybag
+        id: cache-pybag
+        uses: actions/cache@v4
+        with:
+          path: pybag/_build
+          key:
+            pybag-${{ runner.os }}-2204--${{ runner.arch }}--${{
+            hashFiles('env_3p8.yml') }}-${{
+            env.PYBAG_COMMIT }}
+        env:
+            # Increase this value to reset cache if etc/example-environment.yml has not changed
+            CACHE_NUMBER: 0
+      - name: Build cbag and pybag
+        if: (steps.cache-pybag.outputs.cache-hit != 'true') || (steps.cache-conda.outputs.cache-hit != 'true')
+        id: cpp-build
+        run: |
+          cd pybag
+          export PYBAG_PYTHON=python
+          echo "PYBAG_PYTHON=$PYBAG_PYTHON"
+          ./run_test.sh
+  tests:
+    needs: build_pybag
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash -el {0}
+    continue-on-error: true
+    outputs:
+      pytestOutput: ${{ steps.unit-tests.outputs.test }}
+      mypyOutput: ${{ steps.type-checks.outputs.test }}
+    strategy:
+      matrix:
+        python-version: ["3.8"]
+    steps:
+      - name: Get current date
+        id: get-date
+        run: echo "::set-output name=today::$(date +'%Y-%m-%d')"
+      - name: Checkout submodule
+        uses: actions/checkout@v3
+        with:
+          submodules: recursive
+      # Phase 1: Conda cache load
+      - name: Setup conda
+        uses: conda-incubator/setup-miniconda@v3.0.4
+        with:
+          activate-environment: ${{ env.CONDA_ENV_NAME }}
+          python-version: ${{ matrix.python-version }}
+          auto-activate-base: false
+      - name: Save Conda Env
+        # Workaround, this isn't working otherwise.
+        run: |
+          echo "CONDA=$CONDA"
+          echo "CONDA=$CONDA" >> "$GITHUB_ENV"
+      - name: Cache Conda env
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CONDA }}/envs/${{ env.CONDA_ENV_NAME }}
+          key:
+            conda-${{ runner.os }}-2204--${{ runner.arch }}--${{
+            steps.get-date.outputs.today }}-${{
+            hashFiles('env_3p8.yml') }}-${{
+            env.CACHE_NUMBER }}
+        env:
+          # Increase this value to reset cache if etc/example-environment.yml has not changed
+          CACHE_NUMBER: 0
+        id: cache-conda
+      # Phase 2: Pybag cache load
+      - name: Get pybag commit string
+        run: |
+          cd pybag
+          export PYBAG_COMMIT="$(git rev-parse HEAD)"
+          echo $PYBAG_COMMIT
+          echo "PYBAG_COMMIT=$PYBAG_COMMIT" >> "$GITHUB_ENV"
+      - name: Cache pybag
+        id: cache-pybag
+        uses: actions/cache@v4
+        with:
+          path: pybag/_build
+          key:
+            pybag-${{ runner.os }}-2204--${{ runner.arch }}--${{
+            hashFiles('env_3p8.yml') }}-${{
+            env.PYBAG_COMMIT }}
+        env:
+            # Increase this value to reset cache if etc/example-environment.yml has not changed
+            CACHE_NUMBER: 0
+      # Phase 3: Run tests
+      - name: Set python path
+        run: |
+          export PYTHONPATH="$(pwd)/tests:$(pwd)/pybag/_build/lib:$(pwd)/src"
+          echo $PYTHONPATH
+          echo "PYTHONPATH=$PYTHONPATH" >> "$GITHUB_ENV"
+      - name: Run simple test
+        id: simple-test
+        run: |
+          python tests/run_core.py
+      - name: Run unit tests
+        id: unit-tests
+        run: |
+          pytest tests/ -v

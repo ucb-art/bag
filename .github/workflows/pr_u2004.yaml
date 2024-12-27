@@ -1,5 +1,5 @@
-# CI flow
-name: bag-pr-ci
+# CI flow for Ubuntu 20.04
+name: bag-pr-ci_u2004
 
 on:
   push:
@@ -20,6 +20,9 @@ jobs:
       matrix:
         python-version: ["3.7"]
     steps:
+      - name: Get current date
+        id: get-date
+        run: echo "::set-output name=today::$(date +'%Y-%m-%d')"
       - name: Checkout submodule
         uses: actions/checkout@v3
         with:
@@ -41,7 +44,7 @@ jobs:
         with:
           path: ${{ env.CONDA }}/envs/${{ env.CONDA_ENV_NAME }}
           key:
-            conda-${{ runner.os }}--${{ runner.arch }}--${{
+            conda-${{ runner.os }}-2004--${{ runner.arch }}--${{
             steps.get-date.outputs.today }}-${{
             hashFiles('environment.yml') }}-${{
             env.CACHE_NUMBER }}
@@ -91,13 +94,13 @@ jobs:
         with:
           path: pybag/_build
           key:
-            pybag-${{ runner.os }}--${{ runner.arch }}--${{
+            pybag-${{ runner.os }}-2004--${{ runner.arch }}--${{
             hashFiles('environment.yml') }}-${{
             env.PYBAG_COMMIT }}
         env:
             # Increase this value to reset cache if etc/example-environment.yml has not changed
             CACHE_NUMBER: 0
-      - name: Build pybag
+      - name: Build cbag and pybag
         if: (steps.cache-pybag.outputs.cache-hit != 'true') || (steps.cache-conda.outputs.cache-hit != 'true')
         id: cpp-build
         run: |
@@ -107,10 +110,10 @@ jobs:
           ./run_test.sh
   tests:
     needs: build_pybag
+    runs-on: ubuntu-20.04
     defaults:
       run:
         shell: bash -el {0}
-    runs-on: ubuntu-latest
     continue-on-error: true
     outputs:
       pytestOutput: ${{ steps.unit-tests.outputs.test }}
@@ -119,6 +122,9 @@ jobs:
       matrix:
         python-version: ["3.7"]
     steps:
+      - name: Get current date
+        id: get-date
+        run: echo "::set-output name=today::$(date +'%Y-%m-%d')"
       - name: Checkout submodule
         uses: actions/checkout@v3
         with:
@@ -140,7 +146,7 @@ jobs:
         with:
           path: ${{ env.CONDA }}/envs/${{ env.CONDA_ENV_NAME }}
           key:
-            conda-${{ runner.os }}--${{ runner.arch }}--${{
+            conda-${{ runner.os }}-2004--${{ runner.arch }}--${{
             steps.get-date.outputs.today }}-${{
             hashFiles('environment.yml') }}-${{
             env.CACHE_NUMBER }}
@@ -161,7 +167,7 @@ jobs:
         with:
           path: pybag/_build
           key:
-            pybag-${{ runner.os }}--${{ runner.arch }}--${{
+            pybag-${{ runner.os }}-2004--${{ runner.arch }}--${{
             hashFiles('environment.yml') }}-${{
             env.PYBAG_COMMIT }}
         env:

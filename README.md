@@ -1,7 +1,6 @@
-# BAG (BAG AMS Generator)
+# BAG3++
 
-BAG, a recursive acronym which stands for "BAG AMS Generator", is a fork and successor of
-the [BAG\_framework](https://github.com/ucb-art/BAG_framework).
+BAG3++ is an open-source analog mixed-signal (AMS) circuit generator framework. It is a fork and successor of the [BAG2 framework](https://github.com/ucb-art/BAG_framework) and the [BAG3 framework](https://github.com/bluecheetah/bag). It enables highly parameterizable generation of tapeout-ready circuit netlists and layout, including automation of simulation with post-processing, physical verification and extraction, and design automation and optimization.
 
 ## Licensing
 
