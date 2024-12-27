@@ -151,14 +151,15 @@ class VirtuosoChecker(SubProcessChecker, ABC):
                 link.symlink_to(fpath)
 
         flow_list = []
-        sch_path = run_dir / 'netlist.cdl'
         ctl_params = dict(cell_name=cell_name)
         if layout is not None:
             if layout:
+                # Layout path given -> copy to run_dir
                 ext = Path(layout).suffix[1:]
                 lay_path = run_dir / f'layout.{ext}'
                 shutil.copy(layout, str(lay_path))
             else:
+                # No existing layout given (empty str) -> export the layout
                 ext = 'gds'
                 lay_path = run_dir / 'layout.gds'
                 info = self.setup_export_layout(lib_name, cell_name, str(lay_path), lay_view)
@@ -168,14 +169,25 @@ class VirtuosoChecker(SubProcessChecker, ABC):
                 ctl_params['layout_type'] = 'GDSII'
             elif ext == DesignOutput.OASIS.extension:
                 ctl_params['layout_type'] = 'OASIS'
+            elif ext == DesignOutput.CDL.extension:
+                # For netlist-vs-netlist support
+                ctl_params['layout_type'] = 'SPICE'
             else:
                 raise ValueError(f'Cannot determine layout type from layout file name: {lay_path}')
             ctl_params['layout_file'] = str(lay_path)
 
+        sch_path = run_dir / 'netlist.cdl'
         if netlist is not None:
             if netlist:
-                shutil.copy(netlist, str(sch_path))
+                # Sch path given -> copy to run_dir
+                if not Path(sch_path).exists():
+                    shutil.copy(netlist, str(sch_path))
+                elif not Path(netlist).samefile(sch_path):
+                    # Edge case: shutil does not like copying to the same location
+                    # If the sch_path does exist, make sure that we don't have the same path
+                    shutil.copy(netlist, str(sch_path))
             else:
+                # No existing netlist given (empty str) -> export the netlist
                 info = self.setup_export_schematic(lib_name, cell_name, str(sch_path), sch_view)
                 flow_list.append((info[0], info[1], info[2], info[3], all_pass_callback))
 

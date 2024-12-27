@@ -747,6 +747,66 @@ class DbAccess(InterfaceBase, abc.ABC):
             raise ans
         return ans
 
+    def run_lvl(self, gds_file: str, ref_file: str, **kwargs: Any) -> Tuple[bool, str]:
+        """Run LVL with two gds files.
+
+        Parameters
+        ----------
+        gds_file : str
+            name of the current gds to be compared.
+        ref_file : str
+            name of the reference gds file.
+        **kwargs :
+            optional keyword arguments.  See DbAccess class for details.
+
+        Returns
+        -------
+        value : bool
+            True if LVL succeeds
+        log_fname : str
+            name of the LVS log file.
+        """
+        coro = self.async_run_lvl(gds_file, ref_file, **kwargs)
+        results = batch_async_task([coro])
+        if results is None:
+            return False, ''
+
+        ans = results[0]
+        if isinstance(ans, Exception):
+            raise ans
+        return ans
+
+    def run_nvn(self, cell_name: str, netlist: str, ref_file: str, **kwargs: Any) -> Tuple[bool, str]:
+        """Run NVN with two netlist files.
+
+        Parameters
+        ----------
+        cell_name : str
+            cell_name
+        netlist : str
+            name of the current netlist to be compared.
+        ref_file : str
+            name of the reference netlist file.
+        **kwargs :
+            optional keyword arguments.  See DbAccess class for details.
+
+        Returns
+        -------
+        value : bool
+            True if NVN succeeds
+        log_fname : str
+            name of the NVN log file.
+        """
+        coro = self.async_run_nvn(cell_name, netlist, ref_file, **kwargs)
+        results = batch_async_task([coro])
+        if results is None:
+            return False, ''
+
+        ans = results[0]
+        if isinstance(ans, Exception):
+            raise ans
+        return ans
+
     def run_rcx(self, lib_name: str, cell_name: str,
                 params: Optional[Mapping[str, Any]] = None,
                 **kwargs: Any) -> Tuple[str, str]:
@@ -959,6 +1019,31 @@ class DbAccess(InterfaceBase, abc.ABC):
         if self.checker is None:
             return gds_equal(gds_file, ref_file), ''
         return await self.checker.async_run_lvl(gds_file, ref_file, **kwargs)
+
+    async def async_run_nvn(self, cell_name: str, netlist: str, ref_file: str, **kwargs: Any) -> Tuple[bool, str]:
+        """A coroutine for running NVN with netlist files.
+
+        Parameters
+        ----------
+        cell_name : str
+            cell_name
+        netlist : str
+            name of the current netlist to be compared.
+        ref_file : str
+            name of the reference netlist file.
+        **kwargs : Any
+            optional keyword arguments.  See Checker class for details.
+
+        Returns
+        -------
+        value : bool
+            True if NVN succeeds
+        log_fname : str
+            name of the NVN log file.
+        """
+        if self.checker is None:
+            raise Exception('DRC/LVS/RCX is disabled.')
+        return await self.checker.async_run_nvn(cell_name, netlist, ref_file, **kwargs)
 
     async def async_import_layout(self, in_file: str, lib_name: str, cell_name: str, **kwargs: Any) -> str:
         """Import layout.

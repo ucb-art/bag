@@ -48,6 +48,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional, Union, List, Tuple, Dict, Any, Sequence, Callable
 
+import shutil
 from enum import Enum
 from pathlib import Path
 
@@ -249,10 +250,37 @@ class Calibre(VirtuosoChecker):
         return ctl_path
 
     def setup_lvl_flow(self, gds_file: str, ref_file: str, run_dir: Union[str, Path] = '') -> Sequence[FlowInfo]:
-        cmd = ['dbdiff', '-system', 'GDS', '-design', gds_file, '-refdesign', ref_file, '-automatch']
+        # Setup run directory
+        config = self.get_config('lvl')
+        root_dir: Path = config['root_dir']
+
+        if isinstance(run_dir, str):
+            if run_dir:
+                run_dir = Path(run_dir).resolve()
+            else:
+                run_dir = root_dir  # TODO: any way to get a cell_name or something?
+        else:
+            run_dir = run_dir.resolve()
+        run_dir.mkdir(parents=True, exist_ok=True)
+
+        # Copy to run dir
+        lay_path = run_dir / f'layout.gds'
+        shutil.copy(gds_file, str(lay_path))
+        ref_path = run_dir / f'ref_layout.gds'
+        shutil.copy(ref_file, str(ref_path))
+
+        cmd = ['dbdiff', '-system', 'GDS', '-design', str(lay_path), '-refdesign', str(ref_path), '-automatch']
         log_path = run_dir / 'bag_dbdiff.log'
 
         return [(cmd, str(log_path), None, str(run_dir), _lvl_passed_check)]
+
+    def setup_nvn_flow(self, cell_name: str, netlist: str = '', ref_file: str = '',
+                       params: Optional[Dict[str, Any]] = None,
+                       run_dir: Union[str, Path] = '') -> Sequence[FlowInfo]:
+        cmd = ['calibre', '-lvs', '-hier', None]
+        mode = 'nvn'
+        return self._setup_flow_helper('', cell_name, netlist, ref_file, '',
+                                       '', params, mode, cmd, _lvs_passed_check, run_dir)
 
 
 # noinspection PyUnusedLocal

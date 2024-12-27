@@ -170,6 +170,14 @@ class PVS(VirtuosoChecker):
         flow_list.append((run_cmd, str(log_path), run_env, str(run_dir), _rcx_passed_check))
         return flow_list
 
+    def setup_lvl_flow(self, gds_file: str, ref_file: str, run_dir: Union[str, Path] = '') -> Sequence[FlowInfo]:
+        raise NotImplementedError('Not supported yet.')
+
+    def setup_nvn_flow(self, cell_name: str, netlist: str = '', ref_file: str = '',
+                       params: Optional[Dict[str, Any]] = None,
+                       run_dir: Union[str, Path] = '') -> Sequence[FlowInfo]:
+        raise NotImplementedError('Not supported yet.')
+
 
 # noinspection PyUnusedLocal
 def _lvs_passed_check(retcode: int, log_file: str) -> Tuple[bool, str]:

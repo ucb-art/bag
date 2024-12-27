@@ -194,7 +194,7 @@ class Checker(abc.ABC):
         return '', ''
 
     @abc.abstractmethod
-    async def async_run_lvl(self, gds_file: str, ref_file: str,  run_dir: Union[str, Path] = '',
+    async def async_run_lvl(self, gds_file: str, ref_file: str, run_dir: Union[str, Path] = '',
                             **kwargs: Any) -> Tuple[bool, str]:
         """A coroutine for running LVL with two gds files.
 
@@ -213,6 +213,32 @@ class Checker(abc.ABC):
             True if LVL succeeds.
         log_fname : str
             LVL log file name.
+        """
+        return False, ''
+
+    @abc.abstractmethod
+    async def async_run_nvn(self, cell_name: str, netlist: str, ref_file: str,
+                            params: Optional[Dict[str, Any]] = None,
+                            run_dir: Union[str, Path] = '', **kwargs: Any) -> Tuple[bool, str]:
+        """A coroutine for running netlist-vs-netlist with two SPICE files.
+
+        Parameters
+        ----------
+        cell_name : str
+            cell_name
+        netlist : str
+            name of the current netlist to be compared.
+        ref_file : str
+            name of the reference netlist file.
+        run_dir : Union[str, Path]
+            Defaults to empty string.  The run directory, use empty string for default.
+
+        Returns
+        -------
+        success : bool
+            True if NVN succeeds.
+        log_fname : str
+            NVN log file name.
         """
         return False, ''
 
@@ -499,6 +525,45 @@ class SubProcessChecker(Checker, abc.ABC):
         """
         return []
 
+    # noinspection PyMethodMayBeStatic
+    def setup_nvn_flow(self, cell_name: str, netlist: str, ref_file: str,
+                       params: Optional[Dict[str, Any]] = None, run_dir: Union[str, Path] = '',
+                       **kwargs: Any) -> Sequence[FlowInfo]:
+        """This method performs any setup necessary to configure a NVN subprocess flow.
+
+        Parameters
+        ----------
+        cell_name : str
+            cell_name
+        netlist : str
+            name of the current netlist to be compared.
+        ref_file : str
+            name of the reference netlist file
+        params : Optional[Dict[str, Any]]
+            optional NVN parameter values.
+        run_dir : Union[str, Path]
+            Defaults to empty string.  The run directory, use empty string for default.
+
+        Returns
+        -------
+        flow_info : Sequence[FlowInfo]
+            the NVN flow information list.  Each element is a tuple of:
+
+            args : Union[str, Sequence[str]]
+                command to run, as string or list of string arguments.
+            log : str
+                log file name.
+            env : Optional[Dict[str, str]]
+                environment variable dictionary.  None to inherit from parent.
+            cwd : Optional[str]
+                working directory path.  None to inherit from parent.
+            vfun : Sequence[Callable[[Optional[int], str], Any]]
+                a function to validate if it is ok to execute the next process.  The output of the
+                last function is returned.  The first argument is the return code, the
+                second argument is the log file name.
+        """
+        return []
+
     @abc.abstractmethod
     def setup_import_layout(self, in_file: str, lib_name: str, cell_name: str,
                             view_name: str = 'layout', params: Optional[Dict[str, Any]] = None
@@ -628,6 +693,13 @@ class SubProcessChecker(Checker, abc.ABC):
         else:
             return gds_equal(gds_file, ref_file), ''
 
+    async def async_run_nvn(self, cell_name: str, netlist: str, ref_file: str, 
+                            subproc_options: Optional[Dict[str, Any]] = None, 
+                            params: Optional[Dict[str, Any]] = None,
+                            run_dir: Union[str, Path] = '', **kwargs: Any) -> Tuple[bool, str]:
+        flow_info = self.setup_nvn_flow(cell_name, netlist, ref_file, params, run_dir)
+        return await self._manager.async_new_subprocess_flow(flow_info, **(subproc_options or {}))
+
     async def async_import_layout(self, in_file: str, lib_name: str, cell_name: str, view_name: str = 'layout',
                                   params: Optional[Dict[str, Any]] = None,
                                   subproc_options: Optional[Dict[str, Any]] = None, **kwargs: Any) -> str:
@@ -671,6 +743,29 @@ def get_flow_config(root_dir: Dict[str, str], template: Dict[str, str],
         ans[ext_lvs]['link_files'] = ans['lvs']['link_files']
     else:
         ans[ext_lvs]['link_files'] = _process_link_files(test)
+
+    # TODO: create defaults
+    ext_lvl = 'lvl'
+    ans[ext_lvl] = dict(root_dir=Path(root_dir.get(ext_lvl, root_dir['lvs'])).resolve(),
+                        template=str(Path(template.get(ext_lvl, template['lvs'])).resolve()),
+                        env_vars=env_vars.get(ext_lvl, env_vars['lvs']),
+                        params=params.get(ext_lvl, params['lvs']))
+    test = link_files.get(ext_lvl, None)
+    if test is None:
+        ans[ext_lvl]['link_files'] = ans['lvs']['link_files']
+    else:
+        ans[ext_lvl]['link_files'] = _process_link_files(test)
+
+    ext_nvn = 'nvn'
+    ans[ext_nvn] = dict(root_dir=Path(root_dir.get(ext_nvn, root_dir['lvs'])).resolve(),
+                        template=str(Path(template.get(ext_nvn, template['lvs'])).resolve()),
+                        env_vars=env_vars.get(ext_nvn, env_vars['lvs']),
+                        params=params.get(ext_nvn, params['lvs']))
+    test = link_files.get(ext_nvn, None)
+    if test is None:
+        ans[ext_nvn]['link_files'] = ans['lvs']['link_files']
+    else:
+        ans[ext_nvn]['link_files'] = _process_link_files(test)
 
     return ans
 

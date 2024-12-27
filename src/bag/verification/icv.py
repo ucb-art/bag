@@ -44,9 +44,10 @@
 """This module implements LVS/RCX using ICV and stream out from Virtuoso.
 """
 
-from typing import TYPE_CHECKING, Optional, List, Tuple, Dict, Any, Sequence
+from typing import TYPE_CHECKING, Optional, List, Tuple, Dict, Any, Sequence, Union
 
 import os
+from pathlib import Path
 
 from .virtuoso import VirtuosoChecker
 from ..io import read_file, open_temp
@@ -166,9 +167,15 @@ class ICV(VirtuosoChecker):
         else:
             pass
 
+    def setup_drc_flow(self, lib_name: str, cell_name: str, lay_view: str = 'layout',
+                       layout: str = '', params: Optional[Dict[str, Any]] = None,
+                       run_dir: Union[str, Path] = '') -> Sequence[FlowInfo]:
+        raise NotImplementedError('Not supported yet.')
+
     def setup_lvs_flow(self, lib_name: str, cell_name: str, sch_view: str = 'schematic',
-                       lay_view: str = 'layout', gds: str = '', netlist = '',
-                       params: Optional[Dict[str, Any]] = None) -> Sequence[FlowInfo]:
+                       lay_view: str = 'layout', layout: str = '', netlist: str = '',
+                       params: Optional[Dict[str, Any]] = None, run_rcx: bool = False,
+                       run_dir: Union[str, Path] = '') -> Sequence[FlowInfo]:
 
         if netlist:
             netlist = os.path.abspath(netlist)
@@ -180,7 +187,7 @@ class ICV(VirtuosoChecker):
 
         # add schematic/layout export to flow
         flow_list = []
-        if not gds:
+        if not layout:
             cmd, log, env, cwd = self.setup_export_layout(lib_name, cell_name, lay_file, lay_view,
                                                           None)
             flow_list.append((cmd, log, env, cwd, _all_pass))
@@ -208,8 +215,9 @@ class ICV(VirtuosoChecker):
         return flow_list
 
     def setup_rcx_flow(self, lib_name: str, cell_name: str, sch_view: str = 'schematic',
-                       lay_view: str = 'layout', gds: str = '', netlist: str = '',
-                       params: Optional[Dict[str, Any]] = None) -> Sequence[FlowInfo]:
+                       lay_view: str = 'layout', layout: str = '', netlist: str = '',
+                       params: Optional[Dict[str, Any]] = None, run_dir: Union[str, Path] = '',
+                       ) -> Sequence[FlowInfo]:
 
         # update default RCX parameters.
         rcx_params_actual = self.default_rcx_params.copy()
@@ -223,7 +231,7 @@ class ICV(VirtuosoChecker):
         with open_temp(prefix='rcxLog', dir=run_dir, delete=False) as logf:
             log_file = logf.name
         flow_list = []
-        if not gds:
+        if not layout:
             cmd, log, env, cwd = self.setup_export_layout(lib_name, cell_name, lay_file, lay_view,
                                                           None)
             flow_list.append((cmd, log, env, cwd, _all_pass))
@@ -295,6 +303,16 @@ class ICV(VirtuosoChecker):
 
         flow_list.append((cmd, log_file, None, run_dir, rcx_passed))
         return flow_list
+
+    def setup_lvl_flow(self, gds_file: str, ref_file: str, run_dir: Union[str, Path] = '') -> Sequence[FlowInfo]:
+        # TODO: this can be implemented with icv_lvl
+        raise NotImplementedError('Not supported yet.')
+
+    def setup_nvn_flow(self, cell_name: str, netlist: str = '', ref_file: str = '',
+                       params: Optional[Dict[str, Any]] = None,
+                       run_dir: Union[str, Path] = '') -> Sequence[FlowInfo]:
+        # TODO: this can be implemented with icv -nvn
+        raise NotImplementedError('Not supported yet.')
 
     @classmethod
     def _get_lay_sch_files(cls, run_dir, netlist=''):

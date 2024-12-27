@@ -99,7 +99,7 @@ class MeasureResult:
 
 
 class DesignDB(LoggingBase):
-    """A classes that caches extracted netlists.
+    """A class that caches extracted netlists.
     """
 
     def __init__(self, root_dir: Path, log_file: str, db_access: DbAccess,
@@ -163,27 +163,14 @@ class DesignDB(LoggingBase):
         for dut_info in dut_specs:
             static_info: str = dut_info.get('static_info', '')
             if static_info:
-                _info = read_yaml(static_info)
-                cell_name: str = _info['cell_name']
                 use_netlist: Optional[str] = dut_info.get('use_netlist')
-                if use_netlist is None:
-                    ext_path = self._root_dir / cell_name
-                    ext_path.mkdir(parents=True, exist_ok=True)
-                    ext_netlist = ext_path / 'rcx.sp'
-                else:
-                    ext_path = None
-                    ext_netlist = Path(use_netlist)
-                dut_pins = {}
-                for _term in _info['out_terms']:
-                    dut_pins[_term] = TermType.output
-                for _term in _info['io_terms']:
-                    dut_pins[_term] = TermType.inout
-                for _term in _info['in_terms']:
-                    dut_pins[_term] = TermType.input
-                dut = DesignInstance(_info['lib_name'], cell_name, None, None, ext_netlist,
-                                     [PySchCellViewInfo(static_info)], dut_pins)
+                extract: Optional[bool] = dut_info.get('extract', False)
+                em: bool = dut_info.get('em', False)
+                dut, ext_path, is_cached = await self._create_dut_static(static_info, use_netlist,
+                                                                         extract, em)
             else:
                 dut, ext_path, is_cached = await self._create_dut(**dut_info)
+
             ans.append(dut)
             if ext_path is not None and ext_path not in extract_set:
                 extract_set.add(ext_path)
@@ -239,6 +226,41 @@ class DesignDB(LoggingBase):
                           dut_params: Mapping[str, Any], extract: Optional[bool] = None,
                           name_prefix: str = '', name_suffix: str = '', flat: bool = False,
                           export_lay: bool = False, em: bool = False) -> Tuple[DesignInstance, Optional[Path], bool]:
+        """Check for cached designs and, if not cached, create a new instance.
+        If `dut_cls` is a TemplateBase (i.e. a layout generator), a GDS is created first. Then,
+            if `export_lay` is True, an OA view will be created.
+
+        Parameters
+        ----------
+        impl_cell : str
+            Cell name
+        dut_cls : Union[Type[TemplateBase], Type[Module], str]
+            Generator template class (DesignMaster)
+        dut_params : Mapping[str, Any]
+            Generator template parameters
+        extract : Optional[bool]
+            If True, create an extracted netlist
+        name_prefix : str
+            Optional additional prefix for all cell names, for uniquification
+        name_suffix : str
+            Optional additional suffix for all cell names, for uniquification
+        flat : bool
+            If True, generate flat netlist
+        export_lay: bool
+            If True, create OA layout view in addition to GDS. Else, only write to GDS.
+        em: bool
+            If True, returns GDS in `extract_info` for EM sims
+
+        Returns
+        -------
+        inst : DesignInstance
+            Instance information
+        extract_info : Optional[Path]
+            If `em`, returns the layout GDS. Otherwise, if `extract`, if an extracted netlist does not already exist,
+                returns the directory in which to create the extracted netlist.
+        is_cached : bool
+            True if cached version found
+        """
         sim_ext = self._sim_type.extension
         exact_cell_names = {impl_cell}
 
@@ -321,7 +343,8 @@ class DesignDB(LoggingBase):
                 if not cur_netlist.exists():  # Cached netlist is missing, should ignore and remove from the cache
                     dirs_to_remove.append(dir_name)
                     continue
-                if filecmp.cmp(cdl_netlist, cur_netlist, shallow=False):
+                netlist_cached = await self.cdl_check_cache(impl_cell, cdl_netlist, cur_dir)
+                if netlist_cached:
                     is_cached = await self.gds_check_cache(gds_file, cur_dir)
                     if is_cached:
                         self.log('Found existing design, reusing DUT netlist.')
@@ -365,12 +388,157 @@ class DesignDB(LoggingBase):
         return DesignInstance(self._sch_db.lib_name, impl_cell, sch_master, lay_master, ans, cv_info_out,
                               sch_master.pins), extract_info, is_cached
 
+    async def _create_dut_static(self, static_info: str, use_netlist: Optional[str] = None,
+                                 extract: bool = False, em: bool = False) -> Tuple[DesignInstance, Optional[Path], bool]:
+        """Check for cached static designs and, if not cached, create a new instance.
+
+        Parameters
+        ----------
+        static_info : str
+            Path to a YAML, containing the static info (lib_name, cell_name, pins)
+        use_netlist : Optional[str]
+            If given, use as (extracted) DUT netlist. Otherwise, create a new extracted netlist.
+        extract : Optional[bool]
+            If True, create an extracted netlist
+        em: bool
+            If True, returns GDS in `extract_info` for EM sims
+
+        Returns
+        -------
+        inst : DesignInstance
+            Instance information
+        extract_info : Optional[Path]
+            If `em`, returns the layout GDS. Otherwise, if `extract`, if an extracted netlist does not already exist,
+                returns the directory in which to create the extracted netlist.
+        is_cached : bool
+            True if cached version found
+        """
+        _info = read_yaml(static_info)
+        lib_name: str = _info['lib_name']
+        impl_cell: str = _info['cell_name']
+        if use_netlist is None:
+            ext_path = self._root_dir / impl_cell
+            ext_path.mkdir(parents=True, exist_ok=True)
+            ext_netlist = ext_path / 'rcx.sp'
+        else:
+            ext_path = None
+            ext_netlist = Path(use_netlist)
+        
+        # Create DUT layout and netlist in unique temporary directory to prevent overwriting of files
+        # during concurrent DUT creation
+        tmp_dir = Path(tempfile.mkdtemp('', 'tmp_', dir=self._root_dir))
+        print(tmp_dir.resolve())
+
+        self.log(f'Exporting layout: {lib_name} {impl_cell}')
+        # layout_hash = hash(lay_master.key)  # TODO
+        gds_file = str(tmp_dir / 'tmp.gds')
+        await self._db.async_export_layout(lib_name, impl_cell, gds_file)
+        assert is_valid_file(gds_file, None, 60, 1, True)
+
+        # if (extract or em) and lay_master is None:
+        #     raise ValueError('Cannot run extraction or em simulations without layout.')
+
+        self.log(f'Exporting schematic: {lib_name} {impl_cell}')
+
+        # create schematic netlist
+        cdl_netlist = str(tmp_dir / 'tmp.cdl')
+        cv_info_out = []  # TODO: add static info
+
+        await self._db.async_export_schematic(lib_name, impl_cell, cdl_netlist)
+        assert is_valid_file(cdl_netlist, None, 60, 1, True)
+
+        self.log('Check for existing netlist')
+        is_cached = False
+
+        # In an interface, the best "uniqueness" is based on a cell's library and name
+        # We will use this same strategy.
+        hash_id = hash(f'{lib_name}__{impl_cell}')
+
+        dir_list = self._cache.get(hash_id, None)
+        if dir_list is None:
+            dir_list = []
+            self._cache[hash_id] = dir_list
+            dir_path = self._generate_cell(impl_cell, cdl_netlist, gds_file)
+            dir_list.append(dir_path.name)
+            write_yaml(self._info_file, self._info_specs)
+        else:
+            dir_path = None
+            dirs_to_remove = []
+            for dir_name in dir_list:
+                cur_dir = self._root_dir / dir_name
+                cur_netlist = cur_dir / 'netlist.cdl'
+                if not cur_netlist.exists():  # Cached netlist is missing, should ignore and remove from the cache
+                    dirs_to_remove.append(dir_name)
+                    continue
+                netlist_cached = await self.cdl_check_cache(impl_cell, cdl_netlist, cur_dir)
+                if netlist_cached:
+                    is_cached = await self.gds_check_cache(gds_file, cur_dir)
+                    if is_cached:
+                        self.log('Found existing design, reusing DUT netlist.')
+                        dir_path = cur_dir
+                        break
+
+            if dirs_to_remove:
+                for dir_name in dirs_to_remove:
+                    dir_list.remove(dir_name)
+                if dir_list:  # Remove entry from cache
+                    del self._cache[hash_id]
+                else:
+                    self._cache[hash_id] = dir_list
+                write_yaml(self._info_file, self._info_specs)
+
+            if dir_path is None:
+                dir_path = self._generate_cell(impl_cell, cdl_netlist, gds_file)
+                dir_list.append(dir_path.name)
+                write_yaml(self._info_file, self._info_specs)
+
+        shutil.rmtree(tmp_dir)  # Remove temporary directory
+        if em:
+            ans = Path(cdl_netlist)
+            extract_info = dir_path / 'layout.gds'
+        else:
+            if use_netlist:
+                ans = ext_netlist
+            elif extract or (extract is None and self._extract):
+                ans = ext_netlist
+                if not ans.exists() or self._force_extract:
+                    extract_info = dir_path
+                else:
+                    extract_info = None
+            else:
+                extract_info = None
+                ans = dir_path / 'netlist.cdl'
+                """
+                CDL netlists can be simulated. StrmOut puts PDK library cells in the netlist. This
+                conflicts with BAG's netlisting, which puts the library cells in `sim.scs`; the
+                double placement causes a conflict at Spectre runtime. One of these has to be
+                resolved before simulating with CDL.
+                """
+                raise RuntimeError("Not implemented yet. See developer")
+        dut_pins = _info['in_terms'] + _info['out_terms'] + _info['io_terms']
+        return DesignInstance(lib_name, impl_cell, None, None, ans, 
+                              [PySchCellViewInfo(static_info)], dut_pins), extract_info, is_cached
+
     async def gds_check_cache(self, gds_file: str, cur_dir: Path) -> bool:
+        """Returns True is the GDS is cached. Runs LVL check of gds_file against layout.gds in
+        cur_dir. If `gds_file` is empty, no GDS is required, so returns True.
+        """
         if not gds_file:
             return True
         if is_valid_file(gds_file, None, 60, 1):
             ref_file = str(cur_dir / 'layout.gds')
             _passed, _log = await self._db.async_run_lvl(gds_file, ref_file, run_dir=cur_dir,
+                                                         subproc_options=dict(run_local=True))
+            return _passed
+        return False
+
+    async def cdl_check_cache(self, cell_name: str, cdl_file: str, cur_dir: Path) -> bool:
+        """Returns True is the CDL is cached. Runs NVN check of netlist against netlist.cdl in
+        cur_dir.
+        """
+        if is_valid_file(cdl_file, None, 60, 1):
+            ref_file = str(cur_dir / 'netlist.cdl')
+            _passed, _log = await self._db.async_run_nvn(cell_name, cdl_file, ref_file, run_dir=cur_dir,
                                                          subproc_options=dict(run_local=True))
             return _passed
         return False
