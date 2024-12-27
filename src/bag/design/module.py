@@ -260,12 +260,20 @@ class Module(DesignMaster):
         """
         self._cv.set_param(key, val)
 
+    def post_design(self, **kwargs: Any) -> None:
+        """Optional function for hooks after 'design'
+        """
+        pass
+
     def finalize(self) -> None:
         """Finalize this master instance.
         """
         # invoke design function, excluding model_params
         args = dict((k, v) for k, v in self.params.items() if k != 'model_params')
         self.design(**args)
+
+        # Hook for optional actions
+        self.post_design(**args)
 
         # get set of children master keys
         for name, inst in self.instances.items():

@@ -50,6 +50,7 @@ _ANA_TYPE_MAP = {
     'fd.pss': 'pss_fd',
     'tran.pss': 'pss_tran',
     'timedomain.pnoise': 'pnoise',
+    'pm.pnoise': 'pnoise',
     'pac_timepoint': 'pac',
 }
 

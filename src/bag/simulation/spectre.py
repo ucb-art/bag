@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 
 from pybag.enum import DesignOutput
-from pybag.core import get_cdba_name_bits
+from pybag.core import get_cdba_name_bits, convert_cdba_name_bit
 
 from ..math import float_to_si_string
 from ..io.file import read_yaml, open_file, is_valid_file, read_file
@@ -511,9 +511,9 @@ def _write_analysis(lines: List[str], sim_env: str, ana: AnalysisInfo, precision
                     has_ic: bool) -> List[str]:
     cur_line = f'__{ana.name}__{sim_env}__'
     if hasattr(ana, 'p_port') and ana.p_port:
-        cur_line += f' {ana.p_port}'
+        cur_line += f' {convert_cdba_name_bit(ana.p_port, DesignOutput.SPECTRE)}'
     if hasattr(ana, 'n_port') and ana.n_port:
-        cur_line += f' {ana.n_port}'
+        cur_line += f' {convert_cdba_name_bit(ana.n_port, DesignOutput.SPECTRE)}'
     cur_line += f' {ana.name}'
 
     if isinstance(ana, AnalysisTran):
@@ -575,9 +575,13 @@ def _write_analysis(lines: List[str], sim_env: str, ana: AnalysisInfo, precision
     if isinstance(ana, AnalysisPNoise):
         if ana.measurement:
             for idx, event in enumerate(ana.measurement):
-                cur_line = f'pm{idx} jitterevent trigger=[{event.trig_p} {event.trig_n}] ' \
+                trig_p = convert_cdba_name_bit(event.trig_p, DesignOutput.SPECTRE)
+                trig_n = convert_cdba_name_bit(event.trig_n, DesignOutput.SPECTRE)
+                targ_p = convert_cdba_name_bit(event.targ_p, DesignOutput.SPECTRE)
+                targ_n = convert_cdba_name_bit(event.targ_n, DesignOutput.SPECTRE)
+                cur_line = f'pm{idx} jitterevent trigger=[{trig_p} {trig_n}] ' \
                            f'triggerthresh={event.triggerthresh} triggernum={event.triggernum} ' \
-                           f'triggerdir={event.triggerdir} target=[{event.targ_p} {event.targ_n}]'
+                           f'triggerdir={event.triggerdir} target=[{targ_p} {targ_n}]'
                 jitter_event.append(cur_line)
     return jitter_event
 
