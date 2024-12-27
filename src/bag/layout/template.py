@@ -2502,14 +2502,16 @@ class TemplateBase(DesignMaster):
         nidx = nout_warr.track_id.base_index
         width = p_tid.width
 
+        _tr_lower = min(pout_warr.lower, nout_warr.lower)
+        _tr_upper = max(pout_warr.upper, nout_warr.upper)
         if track_lower is None:
-            tr_lower = pout_warr.lower
+            tr_lower = _tr_lower
         else:
-            tr_lower = min(track_lower, pout_warr.lower)
+            tr_lower = min(track_lower, _tr_lower)
         if track_upper is None:
-            tr_upper = pout_warr.upper
+            tr_upper = _tr_upper
         else:
-            tr_upper = max(track_upper, pout_warr.upper)
+            tr_upper = max(track_upper, _tr_upper)
 
         return self.connect_differential_tracks(pin_warrs, nin_warrs, lay_id, pidx, nidx,
                                                 width=width, track_lower=tr_lower,
@@ -2691,7 +2693,7 @@ class TemplateBase(DesignMaster):
         y_margin : int
             keepout margin on the y-axis. Fill is centered within margin.
         sup_type: str
-            'both' (default) or 'vdd' or 'vss'
+            Supply fill type. Allowed options are 'vdd', 'vss', or 'both'. Default is 'both'
         uniform_grid : bool
             draw power fill on a common grid instead of dense packing.
         flip : bool
@@ -2710,7 +2712,7 @@ class TemplateBase(DesignMaster):
         if not vdd_warrs and not vss_warrs:
             raise ValueError('At least one of vdd_warrs or vss_warrs must be given.')
 
-        # Build supply lists based on specficiation
+        # Build supply lists based on specification
         if sup_type.lower() == 'both' and vdd_warrs and vss_warrs:
             top_lists = [vdd_warrs, vss_warrs]
         elif sup_type.lower() == 'vss' and vss_warrs:
@@ -2729,16 +2731,19 @@ class TemplateBase(DesignMaster):
         elif sup_type.lower() == 'vss':
             top_vdd = []
             top_vss = ret_warrs[0]
-        else:   # sup_type.lower() == 'vdd':
+        elif sup_type.lower() == 'vdd':
             top_vss = []
             top_vdd = ret_warrs[0]
+        else:
+            raise RuntimeError('Provided supply type and supply wires do not match.')
 
         return top_vdd, top_vss
 
     def do_multi_power_fill(self, layer_id: int, tr_manager: TrackManager,
-                            sup_list: List[Union[WireArray, List[WireArray]]], bound_box: Optional[BBox] = None,
-                            x_margin: int = 0, y_margin: int = 0, flip: bool = False, uniform_grid: bool = False
-                            , draw_on_edge: bool = True) -> List[List[WireArray]]:
+                            sup_list: List[Union[WireArray, List[WireArray]]],
+                            bound_box: Optional[BBox] = None, x_margin: int = 0, y_margin: int = 0,
+                            flip: bool = False, uniform_grid: bool = False, 
+                            draw_on_edge: bool = True) -> List[List[WireArray]]:
         """Draw power fill on the given layer. Accepts as many different supply nets as provided.
 
         Parameters
@@ -2870,12 +2875,19 @@ class TemplateBase(DesignMaster):
                           mlm_dict: Optional[Mapping[int, MinLenMode]] = None,
                           ret_warr_dict: Optional[Mapping[int, WireArray]] = None,
                           coord_list_p_override: Optional[Sequence[int]] = None,
-                          coord_list_o_override: Optional[Sequence[int]] = None, alternate_o: bool = False
-                          ) -> WireArray:
-        """Helper method to draw via stack and connections upto top layer, assuming connections can be on grid.
+                          coord_list_o_override: Optional[Sequence[int]] = None,
+                          alternate_o: bool = False, use_available_tracks: bool = False,
+                          use_all_tracks: bool = False,
+                          ) -> Union[WireArray, List[WireArray]]:
+        """Helper method to draw via stack and connections up to top layer, assuming connections can be on grid.
         Should work regardless of direction of top layer and bot layer.
 
-        This method supports equally spaced WireArrays only. Needs modification for non uniformly spaced WireArrays.
+        This method supports equally spaced WireArrays only. By default, it does NOT check for unused tracks.
+        To use non-uniformly spaced tracks or check for used tracks, use `use_available_tracks`.
+
+        Returns a WireArray (num >= 1) if `use_available_tracks == False`.
+        If `use_available_tracks`, if the length of the return list is 1, returns a single WireArray.
+        Otherwise, returns a full list.
 
         Parameters
         ----------
@@ -2884,7 +2896,7 @@ class TemplateBase(DesignMaster):
         warr: WireArray
             The bot_layer wire array that has to via up
         top_layer: int
-            The top_layer upto which stacked via has to go
+            The top_layer up to which stacked via has to go
         w_type: str
             The wire type, for querying widths from track manager
         alignment_p: int
@@ -2906,10 +2918,15 @@ class TemplateBase(DesignMaster):
             If coord_o_list is computed (i.e. coord_o_list_override is not used) then every other track is skipped
             for via spacing. Using alternate_o, we can choose which set of tracks is used and which is skipped.
             This is useful to avoid line end spacing issues when two adjacent wires require via stacks.
+        use_available_tracks: bool
+            If True, checks for and uses available (unused) tracks. This leads to non-uniformly spaced WireArrays,
+            so the return is a list. If False (default), available tracks are not checked, so collisions can happen.
+        use_all_tracks: bool
+            If True, uses all tracks instead of alternating. Default is False for via spacing.
 
         Returns
         -------
-        top_warr: WireArray
+        top_warr: Union[WireArray, List[WireArray]]
             The top_layer warr after via stacking all the way up
         """
         if ret_warr_dict is None:
@@ -2935,19 +2952,40 @@ class TemplateBase(DesignMaster):
         top_dir = self.grid.get_direction(top_layer)
         top_layer_o = top_layer - 1 if bot_dir == top_dir else top_layer
 
+        # Get orthogonal bounds, for finding available tracks
+        if self.grid.get_direction(bot_layer) == Orient2D.x:
+            _l, _u = warr.bound_box.yl, warr.bound_box.yh
+        else:
+            _l, _u = warr.bound_box.xl, warr.bound_box.xh
+
         if coord_list_o_override is None:
             tidx_l = self.grid.coord_to_track(top_layer_o, warr.lower, RoundMode.GREATER_EQ)
             tidx_r = self.grid.coord_to_track(top_layer_o, warr.upper, RoundMode.LESS_EQ)
-            # Divide by 2 for via separation
-            num_wires_o = tr_manager.get_num_wires_between(top_layer_o, w_type, tidx_l, w_type, tidx_r, w_type) + 2
-            num_wires_o = max(-(- num_wires_o // 2), 1)
-            if num_wires_o == 1:
-                tidx_list_o = [self.grid.coord_to_track(top_layer_o, warr.middle, RoundMode.NEAREST)]
-            else:
-                tidx_list_o = tr_manager.spread_wires(top_layer_o, [w_type] * (2 * num_wires_o - 1), tidx_l, tidx_r,
-                                                      (w_type, w_type), alignment=alignment_o)
-                tidx_list_o = tidx_list_o[1::2] if alternate_o else tidx_list_o[0::2]
+            if use_available_tracks:
+                w_mid = tr_manager.get_width(top_layer_o, w_type)
+                sp_mid = tr_manager.get_sep(top_layer_o, (w_type, w_type))
+                tidx_list_o = self.get_available_tracks(top_layer_o, tidx_l, tidx_r, _l, _u, w_mid, sp_mid, True)
                 num_wires_o = len(tidx_list_o)
+                num_wires_o = max(-(- num_wires_o // 2), 1)
+                if num_wires_o == 1:
+                    tidx_list_o = [self.grid.coord_to_track(top_layer_o, warr.middle, RoundMode.NEAREST)]
+                else:
+                    if not use_all_tracks:
+                        tidx_list_o = tidx_list_o[1::2] if alternate_o else tidx_list_o[0::2]
+                    num_wires_o = len(tidx_list_o)
+            else:
+                # Evenly space wires
+                num_wires_o = tr_manager.get_num_wires_between(top_layer_o, w_type, tidx_l, w_type, tidx_r, w_type) + 2
+                # Divide by 2 for via separation
+                num_wires_o = max(-(- num_wires_o // 2), 1)
+                if num_wires_o == 1:
+                    tidx_list_o = [self.grid.coord_to_track(top_layer_o, warr.middle, RoundMode.NEAREST)]
+                else:
+                    tidx_list_o = tr_manager.spread_wires(top_layer_o, [w_type] * (2 * num_wires_o - 1), tidx_l, tidx_r,
+                                                          (w_type, w_type), alignment=alignment_o)
+                    if not use_all_tracks:
+                        tidx_list_o = tidx_list_o[1::2] if alternate_o else tidx_list_o[0::2]
+                    num_wires_o = len(tidx_list_o)
             # need to compute coord_list for conversion to tidx in layers which are same direction as top_layer_o
             coord_list_o = [self.grid.track_to_coord(top_layer_o, tidx) for tidx in tidx_list_o]
         else:
@@ -2993,16 +3031,46 @@ class TemplateBase(DesignMaster):
                     _num = num_wires_p
                 else:
                     _num = len(coord_list_p)
-                    _tidx_list = [self.grid.coord_to_track(_layer, coord, RoundMode.NEAREST) for coord in coord_list_p]
+                    if alignment_p == 0:
+                        mode = RoundMode.NEAREST
+                    elif alignment_p == -1:
+                        mode = RoundMode.LESS_EQ
+                    else:
+                        mode = RoundMode.GREATER_EQ
+                    _tidx_list = [self.grid.coord_to_track(_layer, coord, mode) for coord in coord_list_p]
             else:
+                # Orthogonal direction
                 _tidx_list = [self.grid.coord_to_track(_layer, coord, RoundMode.NEAREST) for coord in coord_list_o]
-                _num = num_wires_o
-            sep = _tidx_list[1] - _tidx_list[0] if _num > 1 else 0
-            # TODO: support non-uniformly spaced list of WireArrays
-            warr = self.connect_to_tracks(warr, TrackID(_layer, _tidx_list[0], _w, num=_num, pitch=sep),
-                                          min_len_mode=_mlm)
+
+                # Check that the track is available on this layer
+                def _check(tidx):
+                    _list = self.get_available_tracks(_layer, tidx, tidx, _l, _u, _w, include_last=True)
+                    return tidx in _list
+
+                if use_available_tracks:
+                    # TODO: More verification of half tracks required
+                    if len(_tidx_list) > 1:
+                        _tidx_list = [tidx for tidx in _tidx_list if _check(tidx)]
+                _num = len(_tidx_list)
+
+            if _num < 1:
+                raise RuntimeError("connect_via_stack: No vias found!")
+
+            if use_available_tracks:
+                tid_list = [TrackID(_layer, _tidx, _w) for _tidx in _tidx_list]
+                warr_list = [self.connect_to_tracks(warr, _tid, min_len_mode=_mlm) for _tid in tid_list]
+                warr = self.connect_wires(warr_list)
+                if len(warr) == 1:
+                    warr = warr[0]
+            else:
+                # Uniformly spaced
+                sep = _tidx_list[1] - _tidx_list[0] if _num > 1 else 0
+                warr = self.connect_to_tracks(warr, TrackID(_layer, _tidx_list[0], _w, num=_num, pitch=sep),
+                                              min_len_mode=_mlm)
             ret_warr_dict[_layer] = warr
 
+        if not warr:
+            raise RuntimeError("connect_via_stack: No wires drawn!")
         return warr
 
     @property

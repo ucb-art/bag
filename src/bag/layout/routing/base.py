@@ -840,12 +840,14 @@ class TrackManager:
         return TrackID(layer_id, next_tidx, width=self.get_width(layer_id, next_type))
 
     def get_shield_tracks(self, layer_id: int, tidx_lo: HalfInt, tidx_hi: HalfInt,
-                          wtype_lo: Union[str, int], wtype_hi: Union[str, int]) -> List[TrackID]:
+                          wtype_lo: Union[str, int], wtype_hi: Union[str, int],
+                          wtype: Union[str, int] = 1) -> List[TrackID]:
         """Fill the given space with shielding tracks
 
         Try to fill with the widest metal allowed in the PDK
         Respect DRC spacing rules relative to lower and higher wires
-        Currently this method just returns a bunch of width 1 wires.
+
+        Does NOT check for used tracks
 
         Parameters
         ----------
@@ -859,18 +861,21 @@ class TrackManager:
             type of lower bound wire
         wtype_hi: Union[str, int]
             type of upper bound wire
+        wtype: Union[str, int]
+            type of shield width. Defaults to 1
 
         Returns
         -------
         idx_list : List[TrackID]
             list of TrackIDs
         """
-        tr_width = 1
+        tr_width = self.get_width(layer_id, wtype)
 
         sh_tr_lower = self.get_next_track(layer_id, tidx_lo, wtype_lo, tr_width, up=True)
         sh_tr_upper = self.get_next_track(layer_id, tidx_hi, wtype_hi, tr_width, up=False)
-        num_tracks = (sh_tr_upper - sh_tr_lower + 1) // 1
-        tr_locs = [sh_tr_lower + i for i in range(num_tracks)]
+        num_tracks = self.get_num_wires_between(layer_id, wtype_lo, tidx_lo, wtype_hi,
+                                                tidx_hi, wtype)
+        _, tr_locs = self.place_wires(layer_id, [wtype] * num_tracks, sh_tr_lower, 0)
         return [TrackID(layer_id, tr_idx, width=tr_width) for tr_idx in tr_locs]
 
     def spread_wires(self, layer_id: int, type_list: Sequence[Union[str, int]],
